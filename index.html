@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetQuest: 로컬에서 클라우드까지</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Compact Top Bar: Only Current Stage Info & Essential Controls -->
+    <header class="top-bar">
+      <div class="brand">
+        <i data-lucide="globe" class="brand-logo"></i>
+        <span class="brand-name">NetQuest</span>
+        <span class="badge" id="userRankBadge">Lv.1 입문자</span>
+      </div>
+
+      <!-- Current Stage Switcher (Only shows current stage cleanly) -->
+      <div class="stage-switcher">
+        <button class="nav-arrow" id="btnPrevStage" data-tooltip="이전 단계"><i data-lucide="chevron-left"></i></button>
+        <div class="stage-current-box" id="stageSelectorTrigger" role="button" tabindex="0" aria-haspopup="true" aria-expanded="false">
+          <span class="stage-step-tag" id="stageNumberPill">STAGE 1 / 14</span>
+          <strong class="stage-current-title" id="stageTitle">IP와 1:1 연결</strong>
+          <i data-lucide="chevron-down" class="stage-caret"></i>
+          <!-- Stage Dropdown on Hover -->
+          <div class="stage-dropdown" id="stageDropdown"></div>
+        </div>
+        <button class="nav-arrow" id="btnNextStageTop" data-tooltip="다음 단계"><i data-lucide="chevron-right"></i></button>
+      </div>
+
+      <!-- Right Action Buttons -->
+      <div class="top-actions">
+        <!-- Guide Mode Toggle Button -->
+        <button class="btn btn-ghost btn-sm mode-toggle-btn" id="btnGuideToggle" data-tooltip="가이드 옵션 전환: ON(실시간 체크/힌트) / OFF(실전 챌린지: 직접 연결·전송해봐야 파악)">
+          <i data-lucide="compass" id="guideIcon"></i>
+          <span id="guideModeText">가이드 ON</span>
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btnAutoSolve" data-tooltip="현재 단계의 정답 설정을 자동으로 배치해 패킷 흐름을 바로 확인합니다."><i data-lucide="sparkles"></i>자동완성</button>
+        <button class="btn btn-ghost btn-sm" id="btnResetStage" data-tooltip="현재 단계를 처음 상태로 초기화합니다."><i data-lucide="rotate-ccw"></i>초기화</button>
+        <button class="btn btn-ghost btn-sm btn-icon" id="btnSoundToggle" data-tooltip="효과음 켜기 / 끄기"><i data-lucide="volume-2"></i></button>
+      </div>
+    </header>
+
+    <!-- Full-Screen Interactive Canvas Area -->
+    <main class="canvas-stage">
+      <!-- Floating Top HUD -->
+      <div class="hud-top">
+        <!-- Hoverable Concept & Hint Pills -->
+        <div class="hud-info-pills">
+          <div class="info-pill concept-pill">
+            <i data-lucide="book-marked"></i><span>핵심개념</span>
+            <div class="hover-popover">
+              <div class="popover-title" id="popoverChapter">핵심 원리</div>
+              <div class="popover-story" id="stageStory"></div>
+              <div class="popover-body" id="stageConcept"></div>
+            </div>
+          </div>
+
+          <div class="info-pill hint-pill">
+            <i data-lucide="lightbulb"></i><span>힌트</span>
+            <div class="hover-popover">
+              <div class="popover-title">단계별 해결 힌트</div>
+              <div class="popover-body" id="stageHint"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Compact Mission Chips -->
+        <div class="hud-missions">
+          <i data-lucide="target" class="hud-missions-icon"></i>
+          <div id="missionChecklist" class="hud-missions-list"></div>
+        </div>
+
+        <!-- Toolbar & Run Button -->
+        <div class="hud-tools">
+          <button class="tool-btn active" id="toolSelect" data-tool="select" data-tooltip="장비를 클릭해 설정하거나 드래그해서 위치를 옮깁니다."><i data-lucide="mouse-pointer-2"></i>선택/이동</button>
+          <button class="tool-btn" id="toolCable" data-tool="cable" data-tooltip="두 장비를 차례로 클릭해 랜선을 연결하거나, 연결된 선을 클릭해 끊습니다."><i data-lucide="cable"></i>랜선 연결</button>
+          <button class="btn btn-run" id="btnRunSim" data-tooltip="설정한 네트워크로 실제 패킷을 전송해 미션 달성 여부를 검증합니다."><i data-lucide="play"></i>패킷 전송</button>
+        </div>
+      </div>
+
+      <!-- Main Topology Canvas -->
+      <div class="canvas-container" id="canvasContainer">
+        <div id="zoneLayer" class="zone-layer"></div>
+
+        <svg id="networkSvg" class="network-svg" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="cableGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#38bdf8" />
+              <stop offset="100%" stop-color="#818cf8" />
+            </linearGradient>
+          </defs>
+          <g id="linksGroup"></g>
+          <g id="packetsGroup"></g>
+        </svg>
+
+        <div id="nodesLayer" class="nodes-layer"></div>
+
+        <!-- Floating Banner for Cable Mode -->
+        <div id="canvasBanner" class="canvas-banner hidden"></div>
+
+        <!-- Floating Node Config Popover -->
+        <div id="nodeConfigPopover" class="node-config-popover hidden">
+          <div class="config-popover-header">
+            <div class="config-title-wrap">
+              <span id="cfgIcon"></span>
+              <div>
+                <h3 id="cfgName">장비 이름</h3>
+                <span id="cfgRole" class="cfg-role">역할</span>
+              </div>
+            </div>
+            <button class="btn-close-sm" id="btnCloseConfig" data-tooltip="닫기 (ESC)"><i data-lucide="x"></i></button>
+          </div>
+          <div id="inspectorBody" class="config-popover-body"></div>
+        </div>
+      </div>
+
+      <!-- Slim Bottom Status Bar + Expandable Drawer -->
+      <footer class="bottom-bar" id="bottomBar">
+        <div class="bottom-summary-row">
+          <div class="latest-log" id="latestLogBanner">
+            <span class="status-dot info"></span>
+            <span id="latestLogText">장비에 마우스를 올리면 상세 설명이 나타나며, 클릭하면 바로 설정할 수 있습니다.</span>
+          </div>
+
+          <div class="bottom-drawer-triggers">
+            <button class="drawer-btn" data-drawer="xray"><i data-lucide="scan-search"></i>패킷 해부기</button>
+            <button class="drawer-btn" data-drawer="cli"><i data-lucide="terminal"></i>터미널</button>
+            <button class="drawer-btn" data-drawer="log"><i data-lucide="scroll-text"></i>로그</button>
+          </div>
+        </div>
+
+        <!-- Collapsible Drawer Content -->
+        <div class="bottom-drawer hidden" id="bottomDrawer">
+          <div class="drawer-header">
+            <span id="drawerTitle">패킷 헤더 해부기</span>
+            <button class="btn-close-sm" id="btnCloseDrawer"><i data-lucide="chevron-down"></i>닫기</button>
+          </div>
+
+          <div class="drawer-panel hidden" id="panelXray">
+            <div class="xray-container" id="xrayContainer"></div>
+          </div>
+
+          <div class="drawer-panel hidden" id="panelCli">
+            <div class="cli-output" id="cliOutput">
+              <div class="cli-line muted">명령어: help, ipconfig, ping [IP], traceroute [IP], nslookup [도메인], arp -a, curl [IP:포트]</div>
+            </div>
+            <form class="cli-input-row" id="cliForm">
+              <span class="cli-prompt">user@pc1:~$</span>
+              <input type="text" id="cliInput" placeholder="예: ping 192.168.1.20" autocomplete="off" />
+              <button type="submit" class="btn btn-sm btn-primary"><i data-lucide="corner-down-left"></i>실행</button>
+            </form>
+          </div>
+
+          <div class="drawer-panel hidden" id="panelLog">
+            <div class="log-list" id="packetLogList"></div>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Global Floating Hover Tooltip -->
+  <div id="floatingTooltip" class="floating-tooltip hidden"></div>
+
+  <!-- Stage Clear Modal -->
+  <div class="modal-backdrop hidden" id="successModal">
+    <div class="modal-card">
+      <div class="modal-icon" id="modalIcon"></div>
+      <h2 id="modalTitle">스테이지 클리어!</h2>
+      <p id="modalMessage"></p>
+      <div class="modal-learned-box" id="modalLearned"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnStayStage">현재 화면 보기</button>
+        <button class="btn btn-primary" id="btnNextStage">다음 단계로<i data-lucide="arrow-right"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/lucide.min.js"></script>
+  <script src="stages.js"></script>
+  <script src="docker-stages.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
